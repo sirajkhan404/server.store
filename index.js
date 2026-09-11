@@ -5,6 +5,7 @@ const { connectDB } = require("./config/db")
 const auth = require("./routes/auth")
 const products = require("./routes/prodcuts")
 const orders = require("./routes/orders")
+const contact = require("./routes/contact")
 
 const app = express()
 
@@ -27,6 +28,7 @@ app.use("/auth", auth)
 app.use("/api/auth", auth)
 app.use("/api/products", products)
 app.use("/api/orders", orders)
+app.use("/api/contact", contact)
 
 const { PORT = 8000 } = process.env
 app.listen(PORT, (req, res) => {
