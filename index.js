@@ -6,6 +6,7 @@ const auth = require("./routes/auth")
 const products = require("./routes/prodcuts")
 const orders = require("./routes/orders")
 const contact = require("./routes/contact")
+const stories = require("./routes/stories")
 
 const app = express()
 
@@ -29,6 +30,7 @@ app.use("/api/auth", auth)
 app.use("/api/products", products)
 app.use("/api/orders", orders)
 app.use("/api/contact", contact)
+app.use("/api/stories", stories)
 
 const { PORT = 8000 } = process.env
 app.listen(PORT, (req, res) => {
