@@ -4,17 +4,17 @@ const Contact = require("../models/contact");
 const { getRandomId } = require("../config/global");
 const { verifyToken } = require("../middleware/auth");
 
-// POST /api/contact/send (Public route)
+// POST /api/contact/send (Public / Authenticated route)
 router.post("/send", async (req, res) => {
     try {
-        const { name, email, subject, message } = req.body;
+        const { name, email, subject, message, uid } = req.body;
 
         if (!name || !email || !subject || !message) {
             return res.status(400).json({ message: "Please fill all required fields", isError: true });
         }
 
         const id = getRandomId();
-        const contactMessage = await Contact.create({ id, name, email, subject, message });
+        const contactMessage = await Contact.create({ id, uid: uid || "", name, email, subject, message });
 
         res.status(201).json({ message: "Message sent successfully! We will get back to you soon.", data: contactMessage });
     } catch (error) {
@@ -34,6 +34,58 @@ router.get("/all", verifyToken, async (req, res) => {
         res.status(200).json({ message: "Contact messages fetched successfully", messages });
     } catch (error) {
         console.error("Error fetching contact messages:", error);
+        res.status(500).json({ message: "Internal server error", isError: true });
+    }
+});
+
+// GET /api/contact/my-messages (Customer / Authenticated user)
+router.get("/my-messages", verifyToken, async (req, res) => {
+    try {
+        const { uid } = req;
+        const userEmail = req.query.email;
+
+        const queryConditions = [];
+        if (uid) queryConditions.push({ uid });
+        if (userEmail) queryConditions.push({ email: userEmail });
+
+        let messages = [];
+        if (queryConditions.length > 0) {
+            messages = await Contact.find({ $or: queryConditions }).sort({ createdAt: -1 });
+        }
+
+        res.status(200).json({ message: "Your messages fetched successfully", messages });
+    } catch (error) {
+        console.error("Error fetching user messages:", error);
+        res.status(500).json({ message: "Internal server error", isError: true });
+    }
+});
+
+// POST /api/contact/reply (superAdmin only - Reply to User)
+router.post("/reply", verifyToken, async (req, res) => {
+    try {
+        if (req.role !== "superAdmin") {
+            return res.status(403).json({ message: "Only superAdmin can reply to messages", isError: true });
+        }
+
+        const { id, replyText } = req.body;
+
+        if (!id || !replyText || !replyText.trim()) {
+            return res.status(400).json({ message: "Reply message is required", isError: true });
+        }
+
+        const contact = await Contact.findOne({ id });
+        if (!contact) {
+            return res.status(404).json({ message: "Contact message not found", isError: true });
+        }
+
+        contact.isReplied = true;
+        contact.replyText = replyText.trim();
+        contact.repliedAt = new Date();
+        await contact.save();
+
+        res.status(200).json({ message: "Reply sent to user dashboard successfully! 🎉", contact });
+    } catch (error) {
+        console.error("Error replying to contact message:", error);
         res.status(500).json({ message: "Internal server error", isError: true });
     }
 });
