@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Stories = require("../models/stories");
 const Products = require("../models/products");
+const Users = require("../models/auth");
 const { verifyToken } = require("../middleware/auth");
 const cloudinary = require("../config/cloudinary");
 const { getRandomId } = require("../config/global");
@@ -170,7 +171,124 @@ router.post("/like/:id", async (req, res) => {
         });
     } catch (error) {
         console.error("LIKE STORY ERROR:", error);
-        res.status(500).json({ message: "Internal server error", isError: true });
+        res.status(500).json({ message: error.message || "Internal server error", isError: true });
+    }
+});
+
+// Record Story View (Public / Customer)
+router.post("/view/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        let uid = req.body?.uid || "";
+        let name = req.body?.name || "Guest Visitor";
+        let email = req.body?.email || "";
+        let avatar = req.body?.avatar || "";
+        let role = req.body?.role || "customer";
+
+        // Check if token exists in header
+        const authHeader = req.headers.authorization;
+        const token = authHeader?.split(" ")[1];
+        if (token) {
+            try {
+                const jwt = require("jsonwebtoken");
+                const decoded = jwt.verify(token, process.env.JWT_SECRET || "codevpk");
+                if (decoded && decoded.uid) {
+                    uid = decoded.uid;
+                    // Look up rich user data from database
+                    const userDoc = await Users.findOne({ uid: decoded.uid });
+                    if (userDoc) {
+                        name = userDoc.fullName || name;
+                        email = userDoc.email || email;
+                        avatar = userDoc.profilePicture || avatar;
+                        role = userDoc.role || role;
+                    }
+                }
+            } catch (tErr) {
+                // fallback to body data
+            }
+        }
+
+        if (!uid) {
+            uid = "anon_" + (req.ip || "guest").replace(/[^a-zA-Z0-9]/g, "_");
+        }
+
+        const story = await Stories.findOne({ id });
+        if (!story) {
+            return res.status(404).json({ message: "Story not found", isError: true });
+        }
+
+        if (!Array.isArray(story.views)) {
+            story.views = [];
+        }
+
+        // Check if already viewed by this uid/email
+        const existingIndex = story.views.findIndex(v => (uid && v.uid === uid) || (email && v.email === email));
+
+        if (existingIndex > -1) {
+            // Update timestamp & latest name/avatar
+            story.views[existingIndex].viewedAt = new Date();
+            if (name && name !== "Guest Visitor") story.views[existingIndex].name = name;
+            if (email) story.views[existingIndex].email = email;
+            if (avatar) story.views[existingIndex].avatar = avatar;
+        } else {
+            // Add new viewer
+            story.views.push({
+                uid,
+                name,
+                email,
+                avatar,
+                role,
+                viewedAt: new Date()
+            });
+        }
+
+        story.viewsCount = story.views.length;
+        await story.save();
+
+        res.status(200).json({
+            message: "View recorded",
+            viewsCount: story.viewsCount
+        });
+    } catch (error) {
+        console.error("RECORD VIEW ERROR:", error);
+        res.status(500).json({ message: error.message || "Internal server error", isError: true });
+    }
+});
+
+// Get Viewers of a Specific Story (SuperAdmin Only)
+router.get("/viewers/:id", verifyToken, async (req, res) => {
+    try {
+        if (req.role !== "superAdmin") {
+            return res.status(403).json({ message: "Forbidden: SuperAdmin access required", isError: true });
+        }
+
+        const { id } = req.params;
+        const story = await Stories.findOne({ id });
+
+        if (!story) {
+            return res.status(404).json({ message: "Story not found", isError: true });
+        }
+
+        // Sort viewers newest first
+        const viewers = (story.views || []).slice().sort((a, b) => new Date(b.viewedAt) - new Date(a.viewedAt));
+
+        // Attach whether each viewer liked the story
+        const likesList = Array.isArray(story.likes) ? story.likes : [];
+        const enrichedViewers = viewers.map(v => ({
+            ...v.toObject ? v.toObject() : v,
+            hasLiked: likesList.includes(v.uid)
+        }));
+
+        res.status(200).json({
+            message: "Viewers fetched successfully",
+            totalViews: story.viewsCount || enrichedViewers.length,
+            viewers: enrichedViewers,
+            storyTitle: story.title,
+            mediaURL: story.mediaURL
+        });
+    } catch (error) {
+        console.error("FETCH STORY VIEWERS ERROR:", error);
+        res.status(500).json({ message: error.message || "Internal server error", isError: true });
     }
 });
 

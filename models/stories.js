@@ -16,6 +16,17 @@ const schema = new Schema({
     isActive: { type: Boolean, default: true },
     likes: { type: [String], default: [] }, // array of user IDs or visitor IDs who liked
     likesCount: { type: Number, default: 0 },
+    views: [
+        {
+            uid: { type: String, default: "" },
+            name: { type: String, default: "Guest Visitor" },
+            email: { type: String, default: "" },
+            avatar: { type: String, default: "" },
+            role: { type: String, default: "customer" },
+            viewedAt: { type: Date, default: Date.now }
+        }
+    ],
+    viewsCount: { type: Number, default: 0 },
     expiresAt: { type: Date }
 }, { timestamps: true });
 
