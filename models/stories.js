@@ -14,6 +14,8 @@ const schema = new Schema({
     storyLink: { type: String, default: "" },
     duration: { type: Number, default: 5 }, // seconds
     isActive: { type: Boolean, default: true },
+    likes: { type: [String], default: [] }, // array of user IDs or visitor IDs who liked
+    likesCount: { type: Number, default: 0 },
     expiresAt: { type: Date }
 }, { timestamps: true });
 

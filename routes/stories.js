@@ -113,6 +113,67 @@ router.get("/public-all", async (req, res) => {
     }
 });
 
+// Like / Unlike Story (Customer or Public User)
+router.post("/like/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        let userId = req.body?.userId;
+
+        // Check if token exists in header
+        const authHeader = req.headers.authorization;
+        const token = authHeader?.split(" ")[1];
+        if (token) {
+            try {
+                const jwt = require("jsonwebtoken");
+                const decoded = jwt.verify(token, process.env.JWT_SECRET || "codevpk");
+                if (decoded && decoded.uid) {
+                    userId = decoded.uid;
+                }
+            } catch (tErr) {
+                // Ignore token error and fallback to userId
+            }
+        }
+
+        if (!userId) {
+            userId = "anon_" + req.ip;
+        }
+
+        const story = await Stories.findOne({ id });
+        if (!story) {
+            return res.status(404).json({ message: "Story not found", isError: true });
+        }
+
+        // Initialize likes array if not present
+        if (!Array.isArray(story.likes)) {
+            story.likes = [];
+        }
+
+        const alreadyLiked = story.likes.includes(userId);
+        let isLiked = false;
+
+        if (alreadyLiked) {
+            story.likes = story.likes.filter(uid => uid !== userId);
+            isLiked = false;
+        } else {
+            story.likes.push(userId);
+            isLiked = true;
+        }
+
+        story.likesCount = story.likes.length;
+        await story.save();
+
+        res.status(200).json({
+            message: isLiked ? "Story liked ❤️" : "Story unliked",
+            isLiked,
+            likesCount: story.likesCount,
+            likes: story.likes
+        });
+    } catch (error) {
+        console.error("LIKE STORY ERROR:", error);
+        res.status(500).json({ message: "Internal server error", isError: true });
+    }
+});
+
 // Get All Stories (SuperAdmin Only)
 router.get("/all", verifyToken, async (req, res) => {
     try {
