@@ -9,14 +9,23 @@ router.post("/send", async (req, res) => {
     try {
         const { name, email, subject, message, uid } = req.body;
 
-        if (!name || !email || !subject || !message) {
-            return res.status(400).json({ message: "Please fill all required fields", isError: true });
+        if (!name || !name.trim() || !email || !email.trim() || !message || !message.trim()) {
+            return res.status(400).json({ message: "Please fill all required fields (Name, Email, Message)", isError: true });
         }
 
         const id = getRandomId();
-        const contactMessage = await Contact.create({ id, uid: uid || "", name, email, subject, message });
+        const finalSubject = subject && subject.trim() ? subject.trim() : "Customer Question / General Inquiry";
+        
+        const contactMessage = await Contact.create({
+            id,
+            uid: uid || "",
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            subject: finalSubject,
+            message: message.trim()
+        });
 
-        res.status(201).json({ message: "Message sent successfully! We will get back to you soon.", data: contactMessage });
+        res.status(201).json({ message: "Your question/message has been sent successfully! The admin will review it shortly. 🎉", data: contactMessage });
     } catch (error) {
         console.error("Error sending contact message:", error);
         res.status(500).json({ message: "Internal server error", isError: true });
